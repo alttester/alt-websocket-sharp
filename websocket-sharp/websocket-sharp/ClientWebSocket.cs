@@ -540,6 +540,15 @@ namespace AltWebSocketSharp
                     retryCountForConnect++;
                 }
 
+                if (ex is WebSocketException exception)
+                {
+                    if (exception.Code == CloseStatusCode.Abnormal && ex.Message.Contains("An exception has occurred while reading an HTTP request/response."))
+                    {
+                        CallOnError("An exception has occurred while reading an HTTP request/response.", ex);
+                        return false;
+                    }
+                }
+
                 logger.Fatal(ex.Message);
                 logger.Debug(ex.ToString());
 
