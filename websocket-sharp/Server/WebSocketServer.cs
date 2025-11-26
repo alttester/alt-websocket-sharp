@@ -38,6 +38,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Security.Principal;
@@ -61,6 +62,7 @@ namespace AltServerWebSocketSharp.Server
         private System.Net.IPAddress _address;
         private AuthenticationSchemes _authSchemes;
         private static readonly string _defaultRealm;
+        private static readonly string _protocolMismatchMessage;
         private bool _dnsStyle;
         private string _hostname;
         private TcpListener _listener;
@@ -85,6 +87,7 @@ namespace AltServerWebSocketSharp.Server
         static WebSocketServer()
         {
             _defaultRealm = "SECRET AREA";
+            _protocolMismatchMessage = "Connection refused: Client is probably trying to connect with the wrong protocol type.";
         }
 
         #endregion
@@ -849,6 +852,27 @@ namespace AltServerWebSocketSharp.Server
                               );
 
                               processRequest(ctx);
+                          }
+                          catch (WebSocketException ex)
+                          {
+                              if (ex.InnerException is EndOfStreamException)
+                              {
+                                  _log.Error(_protocolMismatchMessage);
+                              }
+                              else
+                              {
+                                  _log.Error(ex.Message);
+                              }
+                              
+                              _log.Debug(ex.ToString());
+
+                              cl.Close();
+                          }
+                          catch (System.Security.Authentication.AuthenticationException ex)
+                          {
+                              _log.Error(_protocolMismatchMessage);
+
+                              cl.Close();
                           }
                           catch (Exception ex)
                           {
