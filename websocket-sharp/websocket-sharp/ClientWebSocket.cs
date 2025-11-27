@@ -542,9 +542,15 @@ namespace AltWebSocketSharp
 
                 if (ex is WebSocketException exception)
                 {
-                    if (exception.Code == CloseStatusCode.Abnormal && ex.Message.Contains("An exception has occurred while reading an HTTP request/response."))
+                    if (exception.Code == CloseStatusCode.TlsHandshakeFailure && exception.Message.Contains("An error has occurred during a TLS handshake."))
                     {
-                        CallOnError("An exception has occurred while reading an HTTP request/response.", ex);
+                        CallOnError("An error has occurred during a TLS handshake.", exception);
+                        return false;
+                    }
+
+                    if (exception.Code == CloseStatusCode.Abnormal && exception.Message.Contains("An exception has occurred while reading an HTTP request/response."))
+                    {
+                        CallOnError("An exception has occurred while reading an HTTP request/response.", exception);
                         return false;
                     }
                 }
