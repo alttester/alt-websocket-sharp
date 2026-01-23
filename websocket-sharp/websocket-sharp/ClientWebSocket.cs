@@ -475,6 +475,50 @@ namespace AltWebSocketSharp
             return true;
         }
 
+        // Helper to check if the server is actually running WSS
+        private bool ProbeForWss(string host, int port)
+        {
+            try
+            {
+                using (var tcp = new TcpClient(host, port))
+                // Accept any certificate just for the probe
+                using (var ssl = new SslStream(tcp.GetStream(), false, (sender, cert, chain, errors) => true)) 
+                {
+                    ssl.AuthenticateAsClient(host);
+                    return true; // TLS Handshake succeeded! Server is WSS.
+                }
+            }
+            catch
+            {
+                return false; // Handshake failed or server is offline.
+            }
+        }
+
+        // Helper to check if the server is actually running WS
+        private bool ProbeForWs(string host, int port)
+        {
+            try
+            {
+                using (var tcp = new TcpClient(host, port))
+                using (var stream = tcp.GetStream())
+                {
+                    // Send a dummy HTTP request
+                    byte[] request = Encoding.ASCII.GetBytes("GET / HTTP/1.1\r\nHost: " + host + "\r\n\r\n");
+                    stream.Write(request, 0, request.Length);
+                    
+                    // Read response
+                    byte[] buffer = new byte[10];
+                    int bytesRead = stream.Read(buffer, 0, buffer.Length);
+                    string response = Encoding.ASCII.GetString(buffer, 0, bytesRead);
+                    
+                    return response.StartsWith("HTTP"); // Server responded with plaintext HTTP!
+                }
+            }
+            catch
+            {
+                return false; // Server offline or not HTTP.
+            }
+        }
 
         // As client
         private bool PerformConnectSequence()
@@ -544,12 +588,24 @@ namespace AltWebSocketSharp
                 {
                     if (exception.Code == CloseStatusCode.TlsHandshakeFailure && exception.Message.Contains("An error has occurred during a TLS handshake."))
                     {
+                        if (secure && ProbeForWs(uri.DnsSafeHost, uri.Port))
+                        {
+                            CallOnError("[AltTester WebSocket] Protocol is incorrect (Server requires WS).", exception);
+                            return false;
+                        }
+
                         CallOnError("An error has occurred during a TLS handshake.", exception);
                         return false;
                     }
 
                     if (exception.Code == CloseStatusCode.Abnormal && exception.Message.Contains("An exception has occurred while reading an HTTP request/response."))
                     {
+                        if (!secure && ProbeForWss(uri.DnsSafeHost, uri.Port))
+                        {
+                            CallOnError("[AltTester WebSocket] Protocol is incorrect (Server requires WSS).", exception);
+                            return false;
+                        }
+
                         CallOnError("An exception has occurred while reading an HTTP request/response.", exception);
                         return false;
                     }
