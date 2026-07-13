@@ -53,6 +53,7 @@ using System.IO.Compression;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Threading;
 using AltServerWebSocketSharp.Net;
 using AltServerWebSocketSharp.Net.WebSockets;
 using AltServerWebSocketSharp.Server;
@@ -754,6 +755,28 @@ namespace AltServerWebSocketSharp
             }
         }
 
+        // Prevents unbounded stack growth when the underlying stream (a
+        // NetworkStream over Socket.ReceiveAsync on modern .NET) satisfies a
+        // read from already-buffered data and invokes the AsyncCallback inline.
+        // In that case the websocket receive loop re-enters the next read on the
+        // same stack; a burst of buffered frames then recurses until the stack
+        // overflows. When the operation completes synchronously we bounce the
+        // continuation onto the thread pool so the stack unwinds on each hop.
+        private static AsyncCallback onReadCompleted(Action<IAsyncResult> body)
+        {
+            return ar =>
+            {
+                if (ar.CompletedSynchronously)
+                {
+                    ThreadPool.QueueUserWorkItem(_ => body(ar));
+
+                    return;
+                }
+
+                body(ar);
+            };
+        }
+
         internal static void ReadBytesAsync(
           this Stream stream,
           int length,
@@ -766,8 +789,9 @@ namespace AltServerWebSocketSharp
             var offset = 0;
             var retry = 0;
 
+            Action<IAsyncResult> body = null;
             AsyncCallback callback = null;
-            callback =
+            body =
               ar =>
               {
                   try
@@ -812,6 +836,7 @@ namespace AltServerWebSocketSharp
                           error(ex);
                   }
               };
+            callback = onReadCompleted(body);
 
             try
             {
@@ -848,7 +873,7 @@ namespace AltServerWebSocketSharp
               buff,
               0,
               bufferLength,
-              ar =>
+              onReadCompleted(ar =>
                   {
                       try
                       {
@@ -906,7 +931,7 @@ namespace AltServerWebSocketSharp
                           if (error != null)
                               error(ex);
                       }
-                  },
+                  }),
               null
             );
               };
