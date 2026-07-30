@@ -80,6 +80,13 @@ namespace AltServerWebSocketSharp.Net.WebSockets
             _secure = secure;
             _log = log;
 
+            // Bound blocking sends so a peer that has gone unreachable (e.g. its network dropped
+            // mid-session) can't hang a send forever — this includes the server-initiated close
+            // handshake write, which previously could block indefinitely and wedge the server's
+            // shutdown/restart state. ReceiveTimeout is intentionally left unbounded: waiting for
+            // the next incoming message is normal and can legitimately take a long time.
+            tcpClient.Client.SendTimeout = 5000;
+
             var netStream = tcpClient.GetStream();
 
             if (secure)
