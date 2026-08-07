@@ -449,17 +449,22 @@ namespace AltWebSocketSharp
 
                 streamForLater = socketStream;
                 receivingExitedForLater = receivingExitedEvent;
-
-                ReleaseServerResources();
-                ReleaseCommonResources(false); // no disposal of _receivingExited
-
-                readyState = WebSocketState.Closed;
             } // lock
 
             logger.Trace("Begin closing the connection.");
 
-            // call outside lock
+            // Called outside the lock, and before the transport is torn down: the closing
+            // handshake has to write the close frame to a live stream, otherwise the peer sees an
+            // abnormal disconnect (1006) instead of the code and reason we are closing with.
             var wasClean = DoClosingHandshake();
+
+            lock (forState)
+            {
+                ReleaseServerResources();
+                ReleaseCommonResources(false); // no disposal of _receivingExited
+
+                readyState = WebSocketState.Closed;
+            }
 
             logger.Trace("End closing the connection.");
 
@@ -565,17 +570,22 @@ namespace AltWebSocketSharp
 
                 streamForLater = socketStream;
                 receivingExitedForLater = receivingExitedEvent;
-
-                ReleaseServerResources();
-                ReleaseCommonResources(false);
-
-                readyState = WebSocketState.Closed;
             } // lock
 
             logger.Trace("Begin closing the connection.");
 
-            // call outside lock
+            // Called outside the lock, and before the transport is torn down: the closing frame
+            // has to reach a live stream, otherwise the peer sees an abnormal disconnect (1006)
+            // instead of the code and reason we are closing with.
             var wasClean = SendClosingBytes();
+
+            lock (forState)
+            {
+                ReleaseServerResources();
+                ReleaseCommonResources(false);
+
+                readyState = WebSocketState.Closed;
+            }
 
             logger.Trace("End closing the connection.");
 
