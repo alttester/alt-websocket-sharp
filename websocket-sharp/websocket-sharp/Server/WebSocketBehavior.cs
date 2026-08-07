@@ -94,6 +94,31 @@ namespace AltWebSocketSharp.Server
         }
 
         /// <summary>
+        /// Gets a value indicating whether the WebSocket connection for a session
+        /// is alive.
+        /// </summary>
+        /// <value>
+        /// <c>true</c> if the connection is alive; otherwise, <c>false</c>.
+        /// </value>
+        /// <exception cref="InvalidOperationException">
+        /// The session has not started yet.
+        /// </exception>
+        protected bool IsAlive
+        {
+            get
+            {
+                if (_websocket == null)
+                {
+                    var msg = "The session has not started yet.";
+
+                    throw new InvalidOperationException(msg);
+                }
+
+                return _websocket.IsAlive;
+            }
+        }
+
+        /// <summary>
         /// Gets the logging function.
         /// </summary>
         /// <value>
