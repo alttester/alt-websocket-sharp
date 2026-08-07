@@ -908,6 +908,10 @@ namespace AltWebSocketSharp.Server
             host.StartSession(context);
         }
 
+        // Microseconds spent waiting for an inbound connection before the accept loop rechecks
+        // the server state. Also bounds how long Stop() waits for the loop to notice.
+        private const int _acceptPollTimeout = 250000;
+
         private void receiveRequest()
         {
             while (true)
@@ -915,6 +919,18 @@ namespace AltWebSocketSharp.Server
                 TcpClient cl = null;
                 try
                 {
+                    if (_state == ServerState.ShuttingDown)
+                        return;
+
+                    // Poll with a timeout rather than parking in AcceptTcpClient: on Unix a
+                    // blocking accept holds a reference on the listener's socket handle, and
+                    // TcpListener.Stop() -> Socket.Dispose() spin-waits for that reference to be
+                    // released without interrupting the accept. A server that has accepted at
+                    // least one connection therefore deadlocks on shutdown. Polling keeps the
+                    // accept unblocked and lets this loop observe the shutdown itself.
+                    if (!_listener.Server.Poll(_acceptPollTimeout, SelectMode.SelectRead))
+                        continue;
+
                     cl = _listener.AcceptTcpClient();
                     Task.Factory.StartNew(
                       () =>
