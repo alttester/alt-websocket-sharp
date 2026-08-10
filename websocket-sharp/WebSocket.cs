@@ -1795,7 +1795,14 @@ namespace AltServerWebSocketSharp
                 e = _messageEventQueue.Dequeue();
             }
 
-            _message.BeginInvoke(e, ar => _message.EndInvoke(ar), null);
+            // Reached when a frame arrived while the OnOpen handler above was still running: during
+            // OnOpen the receive loop only queues frames, because _inMessage is set. Dispatch the
+            // queued one on the thread pool rather than through Delegate.BeginInvoke, which is
+            // unsupported on .NET Core and throws PlatformNotSupportedException. That exception used
+            // to escape open() into the accept loop, which closed the TcpClient and so disposed the
+            // stream the receive loop was reading, dropping the connection on connect.
+            var queued = e;
+            ThreadPool.QueueUserWorkItem(_ => _message(queued));
         }
 
         private bool ping(byte[] data)
