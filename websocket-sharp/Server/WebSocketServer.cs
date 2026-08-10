@@ -66,6 +66,8 @@ namespace AltServerWebSocketSharp.Server
         private bool _dnsStyle;
         private string _hostname;
         private TcpListener _listener;
+        // How long a single Accept poll waits before the loop re-checks for shutdown (microseconds).
+        private const int AcceptPollMicroseconds = 250000;
         private Logger _log;
         private int _port;
         private string _realm;
@@ -840,6 +842,17 @@ namespace AltServerWebSocketSharp.Server
 
                 try
                 {
+                    // Never park indefinitely in Accept. Disposing the listening socket while a
+                    // thread is blocked in AcceptTcpClient() makes TcpListener.Stop() hang forever
+                    // on Unix, which left the server stuck in ShuttingDown and made a later Start()
+                    // a silent no-op. Polling lets this loop notice a shutdown and exit by itself,
+                    // so stopReceiving() can join it before disposing the listener.
+                    if (_state == ServerState.ShuttingDown)
+                        return;
+
+                    if (!_listener.Server.Poll(AcceptPollMicroseconds, SelectMode.SelectRead))
+                        continue;
+
                     cl = _listener.AcceptTcpClient();
 
                     ThreadPool.QueueUserWorkItem(
@@ -1027,8 +1040,11 @@ namespace AltServerWebSocketSharp.Server
 
         private void stopReceiving(int millisecondsTimeout)
         {
-            _listener.Stop();
+            // Order matters: join first, dispose second. The accept loop polls and returns on its
+            // own once _state is ShuttingDown, so by the time we dispose the listener no thread is
+            // parked in Accept — which is what used to make Stop() hang forever on Unix.
             _receiveThread.Join(millisecondsTimeout);
+            _listener.Stop();
         }
 
         private static bool tryCreateUri(
