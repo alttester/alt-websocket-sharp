@@ -15,17 +15,24 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    # Same guards AltTester-Server puts on its self-hosted job: skip drafts, and never run a pull
+    # request from a fork - this executes on our own hardware, so it must not build code from a
+    # repository we do not control. This one is a public fork, so that matters here.
+    if: |
+      github.event.pull_request.draft != true &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      # The solution still points at the pre-rename websocket-sharp.csproj, so build the project
-      # file directly.
+      # No setup-dotnet step: the runner already has the SDK, the same assumption AltTester-Server's
+      # tests job makes, and installing one per run would churn a machine we share.
+      #
+      # The solution still points at the pre-rename websocket-sharp.csproj, so build the project file
+      # directly.
       - name: Build
         run: dotnet build websocket-sharp/altserverwebsocket-sharp.csproj -c Release
 
