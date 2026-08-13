@@ -2576,6 +2576,27 @@ namespace AltServerWebSocketSharp
                   },
                   ex =>
                   {
+                      // releaseServerResources() disposes the stream while this read can still be
+                      // pending, so once closing has begun a failed read is the expected outcome of
+                      // our own teardown, not a fault: the peer is gone, the close handshake timed
+                      // out waiting for its close frame, and we tore the transport down underneath
+                      // the reader. Report receiving as finished and let the close path carry on -
+                      // logging it as Fatal and aborting an already-closing connection only
+                      // produced noise ("Cannot access a disposed object ... NetworkStream") for
+                      // every socket of a client whose network dropped.
+                      if (_readyState == WebSocketState.Closing
+                          || _readyState == WebSocketState.Closed)
+                      {
+                          _log.Trace(ex.Message);
+
+                          var exited = _receivingExited;
+
+                          if (exited != null)
+                              exited.Set();
+
+                          return;
+                      }
+
                       _log.Fatal(ex.Message);
                       _log.Debug(ex.ToString());
 
