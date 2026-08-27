@@ -1622,38 +1622,43 @@ namespace AltServerWebSocketSharp.Server
                 _sweeping = true;
             }
 
-            foreach (var id in InactiveIDs)
+            try
             {
-                if (_state != ServerState.Start)
-                    break;
-
-                lock (_sync)
+                foreach (var id in InactiveIDs)
                 {
                     if (_state != ServerState.Start)
                         break;
 
-                    IWebSocketSession session;
-
-                    if (!_sessions.TryGetValue(id, out session))
-                        continue;
-
-                    var state = session.WebSocket.ReadyState;
-
-                    if (state == WebSocketState.Open)
+                    lock (_sync)
                     {
-                        session.WebSocket.Close(CloseStatusCode.Abnormal);
+                        if (_state != ServerState.Start)
+                            break;
 
-                        continue;
+                        IWebSocketSession session;
+
+                        if (!_sessions.TryGetValue(id, out session))
+                            continue;
+
+                        var state = session.WebSocket.ReadyState;
+
+                        if (state == WebSocketState.Open)
+                        {
+                            session.WebSocket.Close(CloseStatusCode.Abnormal);
+
+                            continue;
+                        }
+
+                        if (state == WebSocketState.Closing)
+                            continue;
+
+                        _sessions.Remove(id);
                     }
-
-                    if (state == WebSocketState.Closing)
-                        continue;
-
-                    _sessions.Remove(id);
                 }
             }
-
-            _sweeping = false;
+            finally
+            {
+                _sweeping = false;
+            }
         }
 
         /// <summary>

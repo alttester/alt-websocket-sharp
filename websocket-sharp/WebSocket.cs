@@ -1369,10 +1369,10 @@ namespace AltServerWebSocketSharp
                     frame.Unmask();
             }
 
-            var wait = !received && sent && _receivingExited != null;
+            var exited = _receivingExited;
 
-            if (wait)
-                received = _receivingExited.WaitOne(_waitTime);
+            if (!received && sent && exited != null)
+                received = exited.WaitOne(_waitTime);
 
             var ret = sent && received;
 
@@ -1946,7 +1946,12 @@ namespace AltServerWebSocketSharp
 
             try
             {
-                _pongReceived.Set();
+                var received = _pongReceived;
+
+                if (received == null)
+                    return false;
+
+                received.Set();
             }
             catch (NullReferenceException)
             {
@@ -2095,19 +2100,9 @@ namespace AltServerWebSocketSharp
                 _inContinuation = false;
             }
 
-            if (_pongReceived != null)
-            {
-                _pongReceived.Close();
 
-                _pongReceived = null;
-            }
-
-            if (_receivingExited != null)
-            {
-                _receivingExited.Close();
-
-                _receivingExited = null;
-            }
+            _pongReceived = null;
+            _receivingExited = null;
         }
 
         private void releaseResources()
@@ -2727,9 +2722,9 @@ namespace AltServerWebSocketSharp
             _log.Trace("Begin closing the connection.");
 
             var sent = rawFrame != null && sendBytes(rawFrame);
-            var received = sent && _receivingExited != null
-                           ? _receivingExited.WaitOne(_waitTime)
-                           : false;
+
+            var exited = _receivingExited;
+            var received = sent && exited != null && exited.WaitOne(_waitTime);
 
             var res = sent && received;
 
