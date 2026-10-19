@@ -4,7 +4,7 @@
 # package, so the binary used to be produced by hand. That is how it drifted from every branch: the
 # DLL that shipped carried an unmerged fix while missing a merged one. Build it here instead, so the
 # binary always corresponds to a commit anyone can point at.
-name: build-dll
+name: build-server-dll
 
 on:
   push:
