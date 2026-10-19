@@ -1,0 +1,35 @@
+name: build-client-dll
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    if: github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build websocket-sharp/websocket-sharp-netstandard/altwebsocket-sharp.csproj -c Release
+
+      - name: Upload altwebsocket-sharp.dll
+        uses: actions/upload-artifact@v4
+        with:
+          name: altwebsocket-sharp-${{ github.sha }}
+          path: |
+            websocket-sharp/websocket-sharp-netstandard/bin/Release/netstandard2.0/altwebsocket-sharp.dll
+            websocket-sharp/websocket-sharp-netstandard/bin/Release/net6.0/altwebsocket-sharp.dll
+            websocket-sharp/websocket-sharp-netstandard/bin/Release/net7.0/altwebsocket-sharp.dll
+          if-no-files-found: error
